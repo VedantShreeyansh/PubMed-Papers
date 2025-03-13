@@ -3,6 +3,7 @@ import csv
 import argparse
 import sys
 import re
+import xml.etree.ElementTree as ET
 
 def fetch_pubmed_query(query: str):
     """Fetch PubMed article IDs based on a search query."""
@@ -26,7 +27,7 @@ def fetch_pubmed_query(query: str):
 def fetch_pubmed_details(pmids: list):
     """Fetch detailed information for PubMed articles (using efetch for full details)."""
     if not pmids:
-        return {}
+        return ""
 
     url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
     params = {
@@ -43,15 +44,13 @@ def fetch_pubmed_details(pmids: list):
         print(f"Error fetching paper details: {e}")
         return ""
 
-def is_academic_affiliation(affiliation: str) -> bool:
-    """Check if an affiliation is academic."""
-    academic_keywords = ["university", "college", "institute", "school", "department", "research center", "lab", "faculty", "hospital"]
-    return any(re.search(rf"\b{word}\b", affiliation, re.IGNORECASE) for word in academic_keywords)
+def is_pharma_biotech_affiliation(affiliation: str) -> bool:
+    """Check if an affiliation belongs to a pharmaceutical or biotech company."""
+    pharma_keywords = ["pharmaceutical", "biotech", "biosciences", "therapeutics", "pharma", "laboratories", "inc", "ltd", "corp", "gmbh", "sa", "llc"]
+    return any(re.search(rf"\b{word}\b", affiliation, re.IGNORECASE) for word in pharma_keywords)
 
 def parse_papers(xml_data: str):
     """Extract relevant data from the PubMed XML response."""
-    import xml.etree.ElementTree as ET
-
     results = []
     root = ET.fromstring(xml_data)
 
@@ -59,8 +58,8 @@ def parse_papers(xml_data: str):
         pmid = article.findtext(".//PMID", "Unknown")
         title = article.findtext(".//ArticleTitle", "Unknown")
         pub_date = article.findtext(".//PubDate/Year", "Unknown")
-
-        non_academic_authors = []
+        
+        pharma_authors = []
         companies = []
         corresponding_email = "N/A"
 
@@ -68,12 +67,17 @@ def parse_papers(xml_data: str):
             name = " ".join(filter(None, [author.findtext("ForeName", ""), author.findtext("LastName", "")]))
             affiliation = author.findtext(".//Affiliation", "")
 
-            if affiliation and not is_academic_affiliation(affiliation):
-                non_academic_authors.append(name)
+            if affiliation and is_pharma_biotech_affiliation(affiliation):
+                pharma_authors.append(name)
                 companies.append(affiliation)
+        
+        
+        corresponding_author = article.find(".//AuthorList/Author[@ValidYN='Y'][Position='first']")
+        if corresponding_author is not None:
+            corresponding_email = corresponding_author.findtext(".//AffiliationInfo/Affiliation", "N/A")
 
-        if non_academic_authors:  # Save only if at least one non-academic author exists
-            results.append([pmid, title, pub_date, ", ".join(non_academic_authors), ", ".join(companies), corresponding_email])
+        if pharma_authors:  
+            results.append([pmid, title, pub_date, ", ".join(pharma_authors), ", ".join(companies), corresponding_email])
 
     return results
 
@@ -85,7 +89,7 @@ def save_to_csv(results, file_name="papers.csv"):
     
     with open(file_name, 'w', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
-        writer.writerow(["PubMed ID", "Title", "Publication Date", "Non-Academic Author(s)", "Company Affiliation(s)", "Corresponding Author(s) Email"])
+        writer.writerow(["PubMed ID", "Title", "Publication Date", "Pharma/Biotech Author(s)", "Company Affiliation(s)", "Corresponding Author(s) Email"])
         writer.writerows(results)
     
     print(f"Results written to {file_name}")
