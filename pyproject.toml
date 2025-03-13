@@ -1,17 +1,17 @@
-[project]
+[tool.poetry]
 name = "pubmed-papers"
 version = "0.1.0"
 description = ""
-authors = [
-    {name = "Vedant",email = "vedant1204jsg@gmail.com"}
-]
+authors = ["Vedant <vedant1204jsg@gmail.com>"]
 readme = "README.md"
-requires-python = ">=3.12"
-dependencies = [
-    "pandas (>=2.2.3,<3.0.0)",
-    "requests (>=2.32.3,<3.0.0)"
-]
+packages = [{include = "test"}]
 
+[tool.poetry.dependencies]
+python = ">=3.12"
+requests = "^2.28.1"
+
+[tool.poetry.scripts]
+get-papers-list = "test:main"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
